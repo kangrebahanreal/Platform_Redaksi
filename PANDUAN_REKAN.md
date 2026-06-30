@@ -87,8 +87,8 @@ Pastikan posisi terminal Anda berada di direktori utama proyek ini.
 
 ## Bagian 3: Verifikasi Sistem dan Pengujian
 
-1. **Pengujian Integrasi PostgreSQL:**
-   * Akses dasbor utama pada `http://localhost:3000` dan klik tombol **"Tarik Data Live Internet"**.
+1. **Pengujian Integrasi PostgreSQL (Penarikan Otomatis):**
+   * Akses atau segarkan (refresh) dasbor utama pada `http://localhost:3000`. Sistem secara otomatis menarik berita live di latar belakang tanpa notifikasi popup.
    * Periksa database PostgreSQL `Redaksi` menggunakan perintah SQL: `SELECT * FROM berita_utama ORDER BY id DESC LIMIT 5;`.
    * Pastikan artikel baru berhasil dicatat dengan penanda waktu terkini.
 2. **Pengujian Toleransi Kesalahan Pengetikan pada AI:**

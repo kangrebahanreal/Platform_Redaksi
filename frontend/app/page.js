@@ -6,7 +6,8 @@ export default function HomePage() {
   const [filterPlatform, setFilterPlatform] = useState('ALL');
   const [filterKategori, setFilterKategori] = useState('ALL');
   const [loading, setLoading] = useState(true);
-  const [fetchingLive, setFetchingLive] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   // Chatbot State
   const [chatOpen, setChatOpen] = useState(false);
@@ -38,25 +39,18 @@ export default function HomePage() {
   };
 
   useEffect(() => {
-    fetchBerita();
-  }, []);
-
-  const handleFetchLive = async () => {
-    setFetchingLive(true);
-    try {
-      const res = await fetch('http://localhost:5000/api/fetch-live', { method: 'POST' });
-      const json = await res.json();
-      if (json.status === 'SUCCESS') {
-        alert(`🌐 Berhasil menarik ${json.count} berita live terbaru dari internet!`);
-        fetchBerita();
-      } else {
-        alert('Gagal menarik live data: ' + json.message);
+    const initPageWithAutoFetch = async () => {
+      setLoading(true);
+      try {
+        // Otomatis memicu penarikan berita live terbaru di latar belakang tanpa notifikasi/alert
+        await fetch('http://localhost:5000/api/fetch-live', { method: 'POST' });
+      } catch (err) {
+        console.error('Auto fetch live news error:', err);
       }
-    } catch (e) {
-      alert('Gagal menghubungi API Live Fetcher.');
-    }
-    setFetchingLive(false);
-  };
+      await fetchBerita();
+    };
+    initPageWithAutoFetch();
+  }, []);
 
   const fetchBerita = async () => {
     setLoading(true);
@@ -171,6 +165,16 @@ export default function HomePage() {
     return matchPlatform && matchKategori;
   });
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterPlatform, filterKategori]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredData.length / ITEMS_PER_PAGE));
+  const paginatedData = filteredData.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
   const getBadgeClass = (platform) => {
     if (!platform) return 'badge-platform-ig';
     const p = platform.toLowerCase();
@@ -223,9 +227,6 @@ export default function HomePage() {
 
           {/* Filter Platform Tabs */}
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-            <button onClick={handleFetchLive} disabled={fetchingLive} className="btn btn-primary" style={{ background: '#10b981', borderColor: '#059669', boxShadow: '0 0 12px rgba(16, 185, 129, 0.4)' }}>
-              {fetchingLive ? '⏳ Menarik Live Data...' : '🌐 Tarik Data Live Web Sekarang'}
-            </button>
             <button onClick={() => setFilterPlatform('ALL')} className={`btn ${filterPlatform === 'ALL' ? 'btn-primary' : 'btn-secondary'}`}>
               ⚡ Semua Platform
             </button>
@@ -344,55 +345,95 @@ export default function HomePage() {
               Tidak ada berita yang cocok dengan filter platform atau situasi ini.
             </div>
           ) : (
-            filteredData.map((item) => {
-              const rek = getRekomendasi(item);
-              const badgeClass = getBadgeClass(item.platform || item.sumber);
-              return (
-                <div key={item.id} className="card-surface" style={{ padding: '22px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                      <span className={`badge ${badgeClass}`}>
-                        {item.platform || 'Instagram'}
-                      </span>
-                      <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{item.kategori}</span>
-                      <span style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: '12px', background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', border: '1px solid #10b981', fontWeight: 700 }}>
-                        🛡️ Radar Anti-Hoaks: VALID & TERVERIFIKASI
-                      </span>
+            <>
+              {paginatedData.map((item) => {
+                const rek = getRekomendasi(item);
+                const badgeClass = getBadgeClass(item.platform || item.sumber);
+                return (
+                  <div key={item.id} className="card-surface" style={{ padding: '22px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <span className={`badge ${badgeClass}`}>
+                          {item.platform || 'Instagram'}
+                        </span>
+                        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{item.kategori}</span>
+                        <span style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: '12px', background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', border: '1px solid #10b981', fontWeight: 700 }}>
+                          🛡️ Radar Anti-Hoaks: VALID & TERVERIFIKASI
+                        </span>
+                      </div>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.tanggal}</span>
                     </div>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.tanggal}</span>
+
+                    <h2 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '10px', lineHeight: 1.4 }}>
+                      {item.judul || item.kalimat}
+                    </h2>
+
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem', lineHeight: 1.6, marginBottom: '16px' }}>
+                      {item.artikel || item.kalimat}
+                    </p>
+
+                    {/* Universal Situational Recommendation Box */}
+                    {rek && (
+                      <div className="situational-box">
+                        <div className="situational-header">
+                          <span>⚡ REKOMENDASI SITUASIONAL: {rek.situasi?.toUpperCase()}</span>
+                          <span style={{ background: 'var(--accent-primary)', color: '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '0.68rem' }}>{rek.urgensi}</span>
+                        </div>
+                        <div className="situational-action">
+                          👉 {rek.tindakan}
+                        </div>
+                        <div className="situational-concrete">
+                          💡 <strong>Solusi Nyata:</strong> {rek.solusi}
+                        </div>
+                      </div>
+                    )}
+
+                    <div style={{ marginTop: '16px', paddingTop: '12px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                      <span>Sumber Akun: <strong style={{ color: 'var(--text-main)' }}>{item.sumber}</strong></span>
+                      {item.poi && <span style={{ color: 'var(--accent-primary)', fontWeight: 600 }}>📍 POI: {item.poi}</span>}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Pagination Bar */}
+              {totalPages > 1 && (
+                <div className="card-surface" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 22px', flexWrap: 'wrap', gap: '12px', marginTop: '10px' }}>
+                  <button
+                    onClick={() => {
+                      setCurrentPage(p => Math.max(1, p - 1));
+                      window.scrollTo({ top: 380, behavior: 'smooth' });
+                    }}
+                    disabled={currentPage === 1}
+                    className="btn btn-secondary"
+                    style={{ opacity: currentPage === 1 ? 0.4 : 1, cursor: currentPage === 1 ? 'not-allowed' : 'pointer', padding: '8px 16px', fontSize: '0.85rem' }}
+                  >
+                    &laquo; Sebelumnya (10 Berita)
+                  </button>
+
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-main)' }}>
+                      Halaman {currentPage} dari {totalPages}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                      Menampilkan halaman {currentPage} (Maksimal 10 liputan per halaman)
+                    </div>
                   </div>
 
-                  <h2 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '10px', lineHeight: 1.4 }}>
-                    {item.judul || item.kalimat}
-                  </h2>
-
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem', lineHeight: 1.6, marginBottom: '16px' }}>
-                    {item.artikel || item.kalimat}
-                  </p>
-
-                  {/* Universal Situational Recommendation Box */}
-                  {rek && (
-                    <div className="situational-box">
-                      <div className="situational-header">
-                        <span>⚡ REKOMENDASI SITUASIONAL: {rek.situasi?.toUpperCase()}</span>
-                        <span style={{ background: 'var(--accent-primary)', color: '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '0.68rem' }}>{rek.urgensi}</span>
-                      </div>
-                      <div className="situational-action">
-                        👉 {rek.tindakan}
-                      </div>
-                      <div className="situational-concrete">
-                        💡 <strong>Solusi Nyata:</strong> {rek.solusi}
-                      </div>
-                    </div>
-                  )}
-
-                  <div style={{ marginTop: '16px', paddingTop: '12px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    <span>Sumber Akun: <strong style={{ color: 'var(--text-main)' }}>{item.sumber}</strong></span>
-                    {item.poi && <span style={{ color: 'var(--accent-primary)', fontWeight: 600 }}>📍 POI: {item.poi}</span>}
-                  </div>
+                  <button
+                    onClick={() => {
+                      setCurrentPage(p => Math.min(totalPages, p + 1));
+                      window.scrollTo({ top: 380, behavior: 'smooth' });
+                    }}
+                    disabled={currentPage === totalPages}
+                    className="btn btn-primary"
+                    style={{ opacity: currentPage === totalPages ? 0.4 : 1, cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', padding: '8px 16px', fontSize: '0.85rem' }}
+                  >
+                    Selanjutnya (10 Berita) &raquo;
+                  </button>
                 </div>
-              );
-            })
+              )}
+            </>
           )}
         </div>
 
