@@ -51,8 +51,9 @@ graph TD
 * **Verifikasi Fakta Otomatis:** Penyematan status verifikasi silang pada setiap artikel untuk mendeteksi informasi yang salah atau hoaks.
 
 ### C. Divisi Frontend dan UI/UX Engineering
-* **Indikator Proses Visual:** Implementasi *loading skeleton* pada antarmuka widget obrolan untuk memberikan umpan balik visual saat sistem memverifikasi basis pengetahuan lokal.
-* **Stabilitas Tata Letak Responsif:** Pengoptimalan struktur grid dan navigasi melayang (*sticky floating layout*) pada tampilan desktop dan peranti bergerak.
+* **Paginasi Terstruktur (10 Liputan per Halaman):** Menerapkan pembatasan maksimal 10 artikel berita per tampilan halaman guna menjaga performa rendering peramban (*browser*) serta ergonomi pembacaan visual.
+* **Silent Auto-Fetch & Sinkronisasi Latar Belakang:** Menghapus ketergantungan pada tombol penarikan manual dan pesan dialog (*alert popup*). Sistem melakukan penelusuran berita real-time dan sinkronisasi ke PostgreSQL secara otomatis setiap kali halaman dasbor dimuat atau disegarkan (*refresh*).
+* **Styling Glassmorphism & Tema Responsif:** Dibangun menggunakan Vanilla CSS modern berbasis variabel (*CSS Variables*) dengan dukungan pengalih tema Terang/Gelap dan tata letak tiga kolom melayang (*sticky floating layout*).
 
 ---
 

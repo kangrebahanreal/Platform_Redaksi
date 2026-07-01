@@ -11,10 +11,12 @@ try:
 except ImportError:
     PSYCOPG2_AVAILABLE = False
 
-DB_COLO_HOST = "localhost"
-DB_COLO_NAME = "Redaksi"
-DB_COLO_USER = "postgres"
-DB_COLO_PASS = "postgres"
+# Konfigurasi Utama: Server Colocation Produksi (Sesuai spesifikasi MobaXterm)
+DB_COLO_HOST = os.getenv("DB_COLO_HOST", "10.100.14.139")
+DB_COLO_NAME = os.getenv("DB_COLO_NAME", "db_ews")
+DB_COLO_USER = os.getenv("DB_COLO_USER", "redaksi")
+DB_COLO_PASS = os.getenv("DB_COLO_PASS", "redaksidata")
+DB_COLO_PORT = int(os.getenv("DB_COLO_PORT", "5432"))
 
 LOCAL_DB_PATH = os.path.join(os.path.dirname(__file__), "db_ews.db")
 
@@ -27,25 +29,63 @@ class DatabaseConfig:
 
     def connect(self):
         if PSYCOPG2_AVAILABLE:
+            # Tier 1: Percobaan koneksi ke Server Colo Produksi (10.100.14.139)
             try:
                 self.connection = psycopg2.connect(
                     host=DB_COLO_HOST,
+                    port=DB_COLO_PORT,
                     database=DB_COLO_NAME,
                     user=DB_COLO_USER,
                     password=DB_COLO_PASS,
-                    connect_timeout=3
+                    connect_timeout=2
                 )
                 self.use_sqlite = False
-                print(f"[DB CONFIG] Berhasil terhubung ke database PostgreSQL lokal ('{DB_COLO_NAME}' di {DB_COLO_HOST}).")
+                print(f"[DB CONFIG] Berhasil terhubung ke PostgreSQL Server Colo Produksi ('{DB_COLO_NAME}' di {DB_COLO_HOST}).")
                 return
-            except Exception as e:
-                print(f"[DB CONFIG] Gagal terhubung ke PostgreSQL ({e}). Auto-Fallback ke SQLite Lokal: {LOCAL_DB_PATH}")
+            except Exception as e_colo:
+                print(f"[DB CONFIG] Koneksi Server Colo {DB_COLO_HOST} tidak dapat dicapai/timeout ({e_colo}). Mencoba koneksi Lokal / SSH Tunnel...")
+                # Tier 2A: Percobaan koneksi ke SSH Tunnel MobaXterm (localhost port 5433 atau 5432 menuju Colo db_ews)
+                for tunnel_port in [5433, 5432]:
+                    try:
+                        self.connection = psycopg2.connect(
+                            host="localhost",
+                            port=tunnel_port,
+                            database=DB_COLO_NAME,
+                            user=DB_COLO_USER,
+                            password=DB_COLO_PASS,
+                            sslmode="disable",
+                            keepalives=1,
+                            keepalives_idle=30,
+                            keepalives_interval=10,
+                            keepalives_count=5,
+                            connect_timeout=3
+                        )
+                        self.use_sqlite = False
+                        print(f"[DB CONFIG] Berhasil terhubung ke PostgreSQL Colo via SSH Tunnel MobaXterm ('{DB_COLO_NAME}' di localhost:{tunnel_port}).")
+                        return
+                    except Exception:
+                        continue
+                # Tier 2B: Percobaan koneksi ke PostgreSQL Lokal biasa (Redaksi)
+                try:
+                    self.connection = psycopg2.connect(
+                        host="localhost",
+                        port=5432,
+                        database="Redaksi",
+                        user="postgres",
+                        password="postgres",
+                        connect_timeout=2
+                    )
+                    self.use_sqlite = False
+                    print(f"[DB CONFIG] Berhasil terhubung ke PostgreSQL Lokal ('Redaksi' di localhost:5432).")
+                    return
+                except Exception as e_local:
+                    print(f"[DB CONFIG] Gagal terhubung ke PostgreSQL Lokal/Tunnel ({e_local}). Auto-Fallback ke SQLite Lokal: {LOCAL_DB_PATH}")
         
         self.use_sqlite = True
         self.connection = sqlite3.connect(LOCAL_DB_PATH, check_same_thread=False)
         self.connection.row_factory = sqlite3.Row
 
-    def execute_query(self, query, params=(), commit=False):
+    def execute_query(self, query, params=(), commit=False, retry=True):
         try:
             if not self.use_sqlite:
                 cursor = self.connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -70,8 +110,10 @@ class DatabaseConfig:
                 except Exception:
                     return []
         except Exception as e:
-            print(f"[DB ERROR] Query failed: {query} | Error: {e}")
+            print(f"[DB ERROR] Query failed ({e}). Mencoba koneksi ulang...")
             self.connect()
+            if retry:
+                return self.execute_query(query, params, commit=commit, retry=False)
             return []
 
     def init_db(self):
@@ -114,6 +156,24 @@ class DatabaseConfig:
                 kalimat TEXT,
                 sumber TEXT,
                 url TEXT
+            );
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS berita_utama (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                judul TEXT,
+                url TEXT,
+                isi_berita TEXT,
+                waktu_scrape TEXT
+            );
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS entitas_berita (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                berita_id INTEGER,
+                nama_entitas TEXT,
+                kategori TEXT,
+                skor_akurasi REAL
             );
             """
         ]

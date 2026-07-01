@@ -30,7 +30,7 @@ def background_live_fetcher_loop():
         try:
             if LIVE_FETCHER_AVAILABLE:
                 print("[BACKGROUND WORKER] Menarik liputan live berkala dari portal berita...")
-                live_fetcher.fetch_all()
+                live_fetcher.fetch_live_news()
         except Exception as e:
             print(f"[BACKGROUND WORKER ERROR] {e}")
         time.sleep(900)  # Interval 15 menit
